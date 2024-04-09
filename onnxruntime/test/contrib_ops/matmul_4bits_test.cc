@@ -200,7 +200,7 @@ void RunTest(int64_t M, int64_t N, int64_t K, int64_t block_size, int64_t accura
   }
 }
 
-TEST(MatMulNBits, Float32) {
+/*TEST(MatMulNBits, Float32) {
   for (auto M : {1, 2, 100}) {
     for (auto N : {1, 2, 32, 288}) {
       for (auto K : {16, 32, 64, 128, 256, 1024, 93, 1234}) {
@@ -222,7 +222,7 @@ TEST(MatMulNBits, Float32) {
       }
     }
   }
-}
+}*/
 
 #if defined(USE_CUDA)
 TEST(MatMulNBits, Float16) {

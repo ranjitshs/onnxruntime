@@ -8,6 +8,8 @@
 #include <unordered_map>
 #ifdef _WIN32
 #include "getopt.h"
+#elif defined(_AIX)
+#include <thread>
 #else
 #include <getopt.h>
 #include <thread>
@@ -30,6 +32,8 @@
 #endif
 
 using namespace onnxruntime;
+
+std::unique_ptr<Ort::Env> ort_env;
 
 namespace {
 void usage() {
@@ -150,9 +154,9 @@ int GetNumCpuCores() { return static_cast<int>(std::thread::hardware_concurrency
 }  // namespace
 
 #ifdef _WIN32
-int real_main(int argc, wchar_t* argv[], Ort::Env& env) {
+int real_main(int argc, wchar_t* argv[], std::unique_ptr<Ort::Env>& env) {
 #else
-int real_main(int argc, char* argv[], Ort::Env& env) {
+int real_main(int argc, char* argv[], std::unique_ptr<Ort::Env>&  env) {
 #endif
   // if this var is not empty, only run the tests with name in this list
   std::vector<std::basic_string<PATH_CHAR_TYPE>> whitelisted_test_cases;
@@ -362,7 +366,7 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
   {
     bool failed = false;
     ORT_TRY {
-      env = Ort::Env{logging_level, "Default"};
+      ort_env.reset(new Ort::Env(logging_level, "Default"));
     }
     ORT_CATCH(const std::exception& ex) {
       ORT_HANDLE_EXCEPTION([&]() {
@@ -851,7 +855,7 @@ select from 'TF8', 'TF16', 'UINT8', 'FLOAT', 'ITENSOR'. \n)");
               });
 
     auto tp = TestEnv::CreateThreadPool(Env::Default());
-    TestEnv test_env(env, sf, tp.get(), std::move(tests), stat);
+    TestEnv test_env(*(ort_env.get()), sf, tp.get(), std::move(tests), stat);
     Status st = test_env.Run(p_models, concurrent_session_runs, repeat_count);
     if (!st.IsOK()) {
       fprintf(stderr, "%s\n", st.ErrorMessage().c_str());
@@ -873,10 +877,9 @@ int wmain(int argc, wchar_t* argv[]) {
 #else
 int main(int argc, char* argv[]) {
 #endif
-  Ort::Env env{nullptr};
   int retval = -1;
   ORT_TRY {
-    retval = real_main(argc, argv, env);
+    retval = real_main(argc, argv, ort_env);
   }
   ORT_CATCH(const std::exception& ex) {
     ORT_HANDLE_EXCEPTION([&]() {

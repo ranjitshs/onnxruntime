@@ -368,6 +368,11 @@ void ortenv_setup() {
 #endif  // TARGET_OS_SIMULATOR || TARGET_OS_IOS
 #endif  // defined(__APPLE__)
 
+//Dummy ort_env in AIX so linking will pass.
+#if defined(_AIX)
+std::unique_ptr<Ort::Env> ort_env;
+#endif
+
 int TEST_MAIN(int argc, char** argv) {
   int status = 0;
   ORT_TRY {

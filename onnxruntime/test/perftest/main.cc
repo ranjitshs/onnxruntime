@@ -11,6 +11,8 @@
 using namespace onnxruntime;
 const OrtApi* g_ort = NULL;
 
+std::unique_ptr<Ort::Env> ort_env;
+
 #ifdef _WIN32
 int real_main(int argc, wchar_t* argv[]) {
 #else
@@ -22,14 +24,13 @@ int real_main(int argc, char* argv[]) {
     perftest::CommandLineParser::ShowUsage();
     return -1;
   }
-  Ort::Env env{nullptr};
   {
     bool failed = false;
     ORT_TRY {
       OrtLoggingLevel logging_level = test_config.run_config.f_verbose
                                           ? ORT_LOGGING_LEVEL_VERBOSE
                                           : ORT_LOGGING_LEVEL_WARNING;
-      env = Ort::Env(logging_level, "Default");
+      ort_env.reset(new Ort::Env(logging_level, "Default"));
     }
     ORT_CATCH(const Ort::Exception& e) {
       ORT_HANDLE_EXCEPTION([&]() {
@@ -42,7 +43,7 @@ int real_main(int argc, char* argv[]) {
       return -1;
   }
   std::random_device rd;
-  perftest::PerformanceRunner perf_runner(env, test_config, rd);
+  perftest::PerformanceRunner perf_runner(*(ort_env.get()), test_config, rd);
 
   // Exit if user enabled -n option so that user can measure session creation time
   if (test_config.run_config.exit_after_session_creation) {
