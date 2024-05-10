@@ -213,6 +213,8 @@ void AttentionTypeAndShapeInference(ONNX_NAMESPACE::InferenceContext& ctx, int p
     }
 
     output_shape.mutable_dim(2)->set_dim_value(v_hidden_size);
+    std::cout<<"numOutput: "<<ctx.getNumOutputs()<<std::endl;
+    //raise(SIGINT);
     updateOutputShape(ctx, 0, output_shape);
 
     if (ctx.getNumOutputs() > 1) {  // has present output

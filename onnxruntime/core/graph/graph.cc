@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
+
 // Licensed under the MIT License.
 
 #include "core/graph/graph.h"
@@ -43,6 +43,103 @@ using namespace ONNX_NAMESPACE::Utils;
 using namespace ::onnxruntime::common;
 
 namespace onnxruntime {
+
+void printMe()
+{
+    std::vector vec{TensorProto_DataType_FLOAT,TensorProto_DataType_INT32, TensorProto_DataType_UINT32, TensorProto_DataType_UINT8, TensorProto_DataType_INT8,
+                    TensorProto_DataType_UINT16, TensorProto_DataType_INT16 ,TensorProto_DataType_FLOAT16, TensorProto_DataType_BFLOAT16,  TensorProto_DataType_UINT64,
+                   TensorProto_DataType_DOUBLE, TensorProto_DataType_INT64, TensorProto_DataType_COMPLEX64};
+    for(size_t i=0; i< std::size(vec); ++i)
+     std::cout<<vec[i]<<" ";
+}
+
+void ConveTens(TensorProto* tensor)
+{
+  size_t element_size=1;
+  char* bytes = NULL;
+  size_t num_elements=0;
+  std::cout<<"data_type:"<<tensor->data_type()<<std::endl;
+      int32_t *ptr;
+//  printMe();
+  switch(tensor->data_type())
+  {
+    case TensorProto_DataType_FLOAT:
+      bytes = (char*)(tensor->mutable_float_data()->mutable_data());
+      num_elements = tensor->float_data_size();
+      element_size = sizeof(float);
+      break;
+
+    case TensorProto_DataType_INT32:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(int32_t);
+		      std::cout<<"num_elements:" <<num_elements<<"element_size:"<<element_size<<std::endl;
+      ptr = (int32_t*)bytes;
+      for(size_t i=0;i<num_elements;++i)
+       std::cout<<ptr[i]<<" ";
+      std::cout<<"\n";
+      break;
+
+    case TensorProto_DataType_UINT32:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(uint32_t);
+      break;
+
+    case TensorProto_DataType_UINT8:
+    case TensorProto_DataType_INT8:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(uint8_t);
+      break;
+
+    case TensorProto_DataType_UINT16:
+    case TensorProto_DataType_INT16:
+    case TensorProto_DataType_FLOAT16:
+    case TensorProto_DataType_BFLOAT16:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(uint16_t);
+      break;
+
+    case TensorProto_DataType_UINT64:
+      bytes = (char*)(tensor->mutable_uint64_data()->mutable_data());
+      num_elements = tensor->uint64_data_size();
+      element_size = sizeof(uint64_t);
+      break;
+
+    case TensorProto_DataType_DOUBLE:
+      bytes = (char*)(tensor->mutable_double_data()->mutable_data());
+      num_elements = tensor->double_data_size();
+      element_size = sizeof(double);
+      break;
+
+       case TensorProto_DataType_INT64:
+      bytes = (char*)(tensor->mutable_int64_data()->mutable_data());
+      num_elements = tensor->int64_data_size();
+      element_size = sizeof(int64_t);
+      break;
+
+    case TensorProto_DataType_COMPLEX64:
+      bytes = (char*)(tensor->mutable_float_data()->mutable_data());
+      num_elements = tensor->float_data_size();
+      element_size = sizeof(float);
+      break;
+  }
+  if (tensor->has_raw_data()) {
+	num_elements = (tensor->raw_data().size()) / element_size;
+    bytes = (char*)(tensor->mutable_raw_data()->c_str());
+  }
+  std::cout<<"num_elements1:" <<num_elements<<"element_size:"<<element_size<<std::endl;
+  for (size_t i = 0; i < num_elements; ++i) {
+    char* start_byte = bytes + i * element_size;
+    char* end_byte = start_byte + element_size - 1;
+    for (size_t count = 0; count < element_size / 2; ++count) {
+      std::swap(*start_byte++,*end_byte--);
+    }
+  }
+  return;
+}
 
 #if !defined(ORT_MINIMAL_BUILD)
 #define NO_CHANGE_ON_SYNC_FLAG(...)                  \
@@ -1193,6 +1290,17 @@ Graph::Graph(const Model& owning_model,
 
     const gsl::not_null<TensorProto*> tensor{graph_proto_->add_initializer()};
     auto status = utils::ConstantNodeProtoToTensorProto(node, model_path, *tensor);
+    const AttributeProto& attrib = node.attribute(0);
+    if constexpr (endian::native != endian::little) {
+    if (attrib.type() == AttributeProto_AttributeType_SPARSE_TENSOR)
+    {
+       const TensorProto& sparse_values = node.attribute(0).sparse_tensor().values();
+       if ((!(sparse_values.has_raw_data())) && tensor->has_raw_data())
+       {
+          ConveTens(tensor);
+       }
+    }
+    }
     ORT_ENFORCE(status.IsOK(), status.ToString());
     // Ensure initializers are also graph inputs.
     if (ir_version_ < 4) {
@@ -2466,6 +2574,58 @@ class GraphInferencerImpl : public ONNX_NAMESPACE::GraphInferencer {
   const Graph::ResolveOptions& options_;
 };
 
+
+
+void ConvNode(Node& node, Graph& graph)
+{
+   for (auto nodearg: node.InputDefs())
+   {
+      const TensorProto* inpt = nullptr;
+      if (graph.IsSparseInitializer(nodearg->Name()))
+      {
+          // Skip Sparse Initializer as no node op support
+          // Sparse Initializer for now
+          break;
+      }
+      graph.GetInitializedTensor(nodearg->Name(), inpt);
+      if (inpt != nullptr)
+      {
+          if (inpt->has_raw_data())
+          {
+              TensorProto nt = *inpt;
+              ConveTens(&nt);
+              Status st = graph.ReplaceInitializedTensor(nt);
+              assert(st.IsOK());
+          }
+      }
+   }
+   
+  /*for (auto nodearg: node.OutputDefs())
+   {
+      if (graph.IsSparseInitializer(nodearg->Name()))
+      {
+          // Skip Sparse Initializer as no node op support
+          // Sparse Initializer for now
+          //break;
+          continue;
+      }
+      const TensorProto* outt = nullptr;
+      graph.GetInitializedTensor(nodearg->Name(), outt);
+      if (outt != nullptr)
+      {
+          if (outt->has_raw_data())
+          {
+              TensorProto nt = *outt;
+              ConveTens(&nt);
+              Status st = graph.ReplaceInitializedTensor(nt);
+              assert(st.IsOK());
+          }
+      }
+   }
+*/
+   
+}
+
 // An implementation of the InferenceContext interface required by operator-specific
 // shape inference for onnxruntime graphs.
 class InferenceContextImpl : public ONNX_NAMESPACE::InferenceContext {
@@ -2761,6 +2921,7 @@ Status Graph::InferAndVerifyTypeMatch(Node& node, const OpSchema& op, const Reso
   // Once that completes, the outputs from the node containing the subgraph will be updated, and the final values
   // returned here.
   SubgraphInferencingFunc func(Graph::InferAndVerifySubgraphTypes);
+  ConvNode(node, *this);
   InferenceContextImpl context(node, func, *this, options);
 
   {
@@ -2890,7 +3051,7 @@ Status Graph::InferAndVerifyTypeMatch(Node& node, const OpSchema& op, const Reso
       }
     }
   }
-
+  ConvNode(node, *this);
   return Status::OK();
 }
 
@@ -3643,6 +3804,12 @@ SaveInputsOutputsToOrtFormat(flatbuffers::FlatBufferBuilder& builder, const std:
 
 common::Status Graph::SaveToOrtFormat(flatbuffers::FlatBufferBuilder& builder,
                                       flatbuffers::Offset<fbs::Graph>& fbs_graph) const {
+  if constexpr (endian::native != endian::little) {
+     auto& tens = GetAllInitializedTensors();
+     for (auto& [name, tensor_p] : tens){
+       ConveTens((TensorProto*)tensor_p);
+     }
+  }
   auto inputs = SaveInputsOutputsToOrtFormat(builder, graph_inputs_including_initializers_);
   auto outputs = SaveInputsOutputsToOrtFormat(builder, graph_outputs_);
 
@@ -5261,6 +5428,10 @@ common::Status Graph::LoadFromOrtFormat(const onnxruntime::fbs::Graph& fbs_graph
       ORT_RETURN_IF(nullptr == fbs_tensor, "Initializer tensor is missing. Invalid ORT format model.");
       TensorProto* initializer = deserialized_proto_data_.add_initializer();
       ORT_RETURN_IF_ERROR(fbs::utils::LoadInitializerOrtFormat(*fbs_tensor, *initializer, load_options));
+      if (initializer->has_raw_data())
+      {
+          ConveTens(initializer);
+      }
       auto p = name_to_initial_tensor_.emplace(initializer->name(), initializer);
       if (!p.second) {
         LOGS(logger_, WARNING) << "Duplicate initializer (dense or ConstantNode): '" << initializer->name()
@@ -5282,6 +5453,16 @@ common::Status Graph::LoadFromOrtFormat(const onnxruntime::fbs::Graph& fbs_graph
       ORT_RETURN_IF_ERROR(fbs::utils::LoadSparseInitializerOrtFormat(*fbs_sparse_tensor, sparse_initializer,
                                                                      load_options));
       TensorProto& initializer = *deserialized_proto_data_.add_initializer();
+      TensorProto* indices = sparse_initializer.mutable_indices();
+      if (indices->has_raw_data())
+      {
+          ConveTens(indices);
+      }
+      TensorProto* values = sparse_initializer.mutable_values();
+      if (values->has_raw_data())
+      {
+          ConveTens(values);
+      }
       ORT_RETURN_IF_ERROR(utils::SparseTensorProtoToDenseTensorProto(sparse_initializer, model_path, initializer));
       auto p = name_to_initial_tensor_.emplace(initializer.name(), &initializer);
       if (!p.second) {

@@ -293,6 +293,7 @@ static void RunAttentionTest(
     const bool disable_dml = false,
     const std::vector<int32_t> qkv_sizes = {},
     const std::vector<float>& relative_position_bias_data = {},
+
     int kv_sequence_length = 0,
     bool past_present_share_buffer = false,
     bool use_scale = false,
@@ -2103,6 +2104,7 @@ static void RunModelWithRandomInput(
     std::vector<int32_t>& mask_index_data,
     std::string& onnx_model,
     bool is_float16) {
+  std::cout<<__func__<<std::endl;
   RandomValueGenerator random{234};
 
   constexpr int hidden_size = 768;
@@ -2126,7 +2128,7 @@ static void RunModelWithRandomInput(
   std::vector<float> bias_data = random.Uniform<float>(bias_dims, min_value, max_value);
 
   float gpu_threshold = is_float16 ? 0.5f : 0.005f;
-  constexpr float cpu_threshold = 0.002f;
+  constexpr float cpu_threshold = 0.002l;
   bool enable_cuda = HasCudaEnvironment(is_float16 ? 530 : 0);
   bool enable_rocm = (nullptr != DefaultRocmExecutionProvider().get());
   bool enable_cpu = (nullptr != DefaultCpuExecutionProvider().get() && !is_float16);
@@ -2158,7 +2160,7 @@ static void RunModelWithRandomInput(
     }
     test.Run(OpTester::ExpectResult::kExpectSuccess, "", {}, nullptr, &execution_providers);
   }
-
+  std::cout<<"enable_cpu:"<<enable_cpu<<std::endl;
   if (enable_cpu) {
     OpTester test("Attention", 1, onnxruntime::kMSDomain);
     test.AddAttribute<int64_t>("num_heads", num_heads);
@@ -2185,6 +2187,7 @@ TEST(AttentionTest, Attention_Mask2D_Fp32_B2_S32) {
       mask_index_data.push_back((i == 0 || j < sequence_length / 2) ? 1 : 0);
     }
   }
+  std::cout<<"size is: "<<mask_index_data.size()<<std::endl;
 
   std::string onnx_model = "testdata/attention_mask2d_fp32.onnx";
   RunModelWithRandomInput(
@@ -2205,6 +2208,7 @@ TEST(AttentionTest, Attention_Mask1D_Fp32_B2_S64) {
   for (int i = 0; i < batch_size; i++) {
     mask_index_data.push_back(i == 0 ? sequence_length : (sequence_length / 2));
   }
+  std::cout<<"size is: "<<mask_index_data.size()<<std::endl;
 
   std::string onnx_model = "testdata/attention_mask1d_fp32.onnx";
   RunModelWithRandomInput(

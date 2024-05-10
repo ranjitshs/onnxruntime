@@ -900,17 +900,20 @@ void BaseTester::AddReferenceOutputs(const std::string& model_path, float abs_er
       auto* mutable_dim = mutable_shape->add_dim();
       mutable_dim->set_dim_value(i);
     }
-
+    std::cout<<"abs_error:"<< std::fixed <<std::setprecision(5)<<abs_error;
     if (abs_error != 0.0f) {
+      std::cout<<"Not zero\n";
       output_data_.push_back(Data(NodeArg(output_names[out_idx], &tmp_type_proto),
                                   std::move(subgraph_fetches[out_idx]),
                                   optional<float>(), optional<float>(abs_error)));
     } else {
+      std::cout<<"zero\n";
       output_data_.push_back(Data(NodeArg(output_names[out_idx], &tmp_type_proto),
                                   std::move(subgraph_fetches[out_idx]),
                                   optional<float>(), optional<float>()));
     }
   }
+      //raise(SIGINT);
 }
 
 #ifdef ENABLE_TRAINING

@@ -69,8 +69,135 @@ void Model::RemoveLocalFunctionsProtos(const InlinedHashSet<std::string>& retain
     }
   }
 }
-
 static constexpr int DEFAULT_PROTOBUF_BLOCK_SIZE = 4 * 1024 * 1024;
+
+void printMe()
+{
+	std::vector vec{TensorProto_DataType_FLOAT,TensorProto_DataType_INT32, TensorProto_DataType_UINT32, TensorProto_DataType_UINT8, TensorProto_DataType_INT8,
+					TensorProto_DataType_UINT16, TensorProto_DataType_INT16 ,TensorProto_DataType_FLOAT16, TensorProto_DataType_BFLOAT16,  TensorProto_DataType_UINT64,
+                   TensorProto_DataType_DOUBLE, TensorProto_DataType_INT64, TensorProto_DataType_COMPLEX64};
+    for(size_t i=0; i< std::size(vec); ++i)
+     std::cout<<vec[i]<<" ";
+}
+
+
+void ConveTens(TensorProto* tensor)
+{
+//		std::cout<<tensor->data_type()<<" "<<tensor->has_raw_data()<<std::endl;
+    char* bytes = NULL;
+            size_t element_size=1;
+        size_t num_elements=0;
+         int32_t *ptr;
+            switch(tensor->data_type())
+            {
+   case TensorProto_DataType_FLOAT:
+      bytes = (char*)(tensor->mutable_float_data()->mutable_data());
+      num_elements = tensor->float_data_size();
+      element_size = sizeof(float);
+      break;
+
+    case TensorProto_DataType_INT32:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(int32_t);
+      std::cout<<"num_elements:" <<num_elements<<"element_size:"<<element_size<<std::endl;
+      ptr = (int32_t*)bytes;
+      for(size_t i=0;i<num_elements;++i)
+       std::cout<<ptr[i]<<" ";
+      std::cout<<"\n";
+      break;
+
+    case TensorProto_DataType_UINT32:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(uint32_t);
+      break;
+
+    case TensorProto_DataType_UINT8:
+    case TensorProto_DataType_INT8:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(uint8_t);
+      break;
+    case TensorProto_DataType_UINT16:
+    case TensorProto_DataType_INT16:
+    case TensorProto_DataType_FLOAT16:
+    case TensorProto_DataType_BFLOAT16:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(uint16_t);
+      break;
+
+    case TensorProto_DataType_UINT64:
+      bytes = (char*)(tensor->mutable_uint64_data()->mutable_data());
+      num_elements = tensor->uint64_data_size();
+      element_size = sizeof(uint64_t);
+      break;
+
+    case TensorProto_DataType_DOUBLE:
+      bytes = (char*)(tensor->mutable_double_data()->mutable_data());
+      num_elements = tensor->double_data_size();
+      element_size = sizeof(double);
+      break;
+
+    case TensorProto_DataType_INT64:
+      bytes = (char*)(tensor->mutable_int64_data()->mutable_data());
+      num_elements = tensor->int64_data_size();
+      element_size = sizeof(int64_t);
+      break;
+
+    case TensorProto_DataType_COMPLEX64:
+      bytes = (char*)(tensor->mutable_float_data()->mutable_data());
+      num_elements = tensor->float_data_size();
+      element_size = sizeof(float);
+      break;
+  }
+  if (tensor->has_raw_data()) {
+    num_elements = (tensor->raw_data().size()) / element_size;
+    bytes = (char*)(tensor->mutable_raw_data()->c_str());
+  }
+  std::cout<<"1: element_size:"<<element_size<<"num_element:"<<num_elements<<std::endl;
+  for (size_t i = 0; i < num_elements; ++i) {
+    char* start_byte = bytes + i * element_size;
+    char* end_byte = start_byte + element_size - 1;
+    for (size_t count = 0; count < element_size / 2; ++count) {
+      std::swap(*start_byte++,*end_byte--);
+    }
+  }
+  return;
+   
+}
+
+void GetSubGraphs(Graph& graph, std::vector<Graph*>& subgraphs)
+{
+  for (auto& node : graph.Nodes()) {
+    for (const Graph* subgraph1 : node.GetSubgraphs()) {
+      Graph* subgraph = const_cast<Graph*>(subgraph1);
+      subgraphs.push_back(subgraph);
+      GetSubGraphs(*subgraph, subgraphs);
+    }
+  }
+}
+
+void ConvGraph(Model& model)
+{
+    Graph& gra = model.MainGraph();
+    std::vector<Graph*> all_subgraphs;
+    GetSubGraphs(gra, all_subgraphs);
+    all_subgraphs.push_back(&gra);
+
+	//std::cout<<"graph vec size:"<<std::size(all_subgraphs)<<std::endl;
+    for (Graph*& grp: all_subgraphs) {
+    Graph& gr = *grp;
+    for (const auto& [name, tensor_p] : gr.GetAllInitializedTensors()) {
+      std::cout<<"tensor_p->has_raw_data:"<<tensor_p->has_raw_data()<<std::endl;
+      if (tensor_p->has_raw_data()) {
+       ConveTens((TensorProto*)tensor_p);
+     }
+    }
+    }
+    std::cout<<"\n";
+}
 
 Model::Model(const std::string& graph_name,
              bool is_onnx_domain_only,
@@ -733,6 +860,13 @@ Status Model::Load(int fd, const PathString& model_path, std::shared_ptr<Model>&
   ORT_RETURN_IF_ERROR(Load(fd, model_proto));
 
   p_model = std::make_shared<Model>(std::move(model_proto), model_path, local_registries, logger, options);
+  if ((model_path != "") && (endian::native != endian::little))
+  {
+    std::cout<<"Converting model for big endian\n";
+    ConvGraph(*p_model);
+    std::cout<<"Converting done\n";
+  }
+  
 
   Graph::ResolveOptions resolve_options;
   resolve_options.no_proto_sync_required = true;
@@ -745,6 +879,8 @@ Status Model::Save(Model& model, int p_fd) {
   if (p_fd < 0) {
     return Status(ONNXRUNTIME, INVALID_ARGUMENT, "<p_fd> is less than 0.");
   }
+    if (endian::native != endian::little)
+      ConvGraph(model);
 
   ORT_RETURN_IF_ERROR(model.MainGraph().Resolve());
 

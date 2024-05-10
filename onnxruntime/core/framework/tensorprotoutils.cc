@@ -236,6 +236,91 @@ Status TensorProtoToOrtValueImpl(const Env& env, const ORTCHAR_T* model_path,
 namespace utils {
 
 #if !defined(ORT_MINIMAL_BUILD)
+
+
+/*void ConvertRawDataInTensorProto(TensorProto* tensor)
+{
+  size_t element_size=1;
+  char* bytes = NULL;
+  size_t num_elements=0;
+  std::cout<<"data_type:"<<tensor->data_type()<<std::endl;
+  switch(tensor->data_type())
+  {
+    case TensorProto_DataType_FLOAT:
+      bytes = (char*)(tensor->mutable_float_data()->mutable_data());
+      num_elements = tensor->float_data_size();
+      element_size = sizeof(float);
+      break;
+
+    case TensorProto_DataType_INT32:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(int32_t);
+      break;
+
+    case TensorProto_DataType_UINT32:
+      bytes = (char*)(tensor->mutable_uint64_data()->mutable_data());
+      num_elements = tensor->uint64_data_size();
+      element_size = sizeof(uint32_t);
+      break;
+
+    case TensorProto_DataType_UINT8:
+    case TensorProto_DataType_INT8:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(uint8_t);
+      break;
+
+    case TensorProto_DataType_UINT16:
+    case TensorProto_DataType_INT16:
+    case TensorProto_DataType_FLOAT16:
+    case TensorProto_DataType_BFLOAT16:
+      bytes = (char*)(tensor->mutable_int32_data()->mutable_data());
+      num_elements = tensor->int32_data_size();
+      element_size = sizeof(uint16_t);
+      break;
+
+    case TensorProto_DataType_UINT64:
+      bytes = (char*)(tensor->mutable_uint64_data()->mutable_data());
+      num_elements = tensor->uint64_data_size();
+      element_size = sizeof(uint64_t);
+      break;
+
+    case TensorProto_DataType_DOUBLE:
+      bytes = (char*)(tensor->mutable_double_data()->mutable_data());
+      num_elements = tensor->double_data_size();
+      element_size = sizeof(double);
+      break;
+
+    case TensorProto_DataType_INT64:
+      bytes = (char*)(tensor->mutable_int64_data()->mutable_data());
+      num_elements = tensor->int64_data_size();
+      element_size = sizeof(int64_t);
+      break;
+
+    case TensorProto_DataType_COMPLEX64:
+      bytes = (char*)(tensor->mutable_float_data()->mutable_data());
+      num_elements = tensor->float_data_size();
+      element_size = sizeof(float);
+      break;
+  }
+  if (tensor->has_raw_data()) {
+    num_elements = (tensor->raw_data().size()) / element_size;
+    bytes = (char*)(tensor->mutable_raw_data()->c_str());
+  }
+  std::cout<<"num_elements:"<<num_elements<<"element_size:"<<element_size<<std::endl;
+  for (size_t i = 0; i < num_elements; ++i) {
+    char* start_byte = bytes + i * element_size;
+    char* end_byte = start_byte + element_size - 1;
+    for (size_t count = 0; count < element_size / 2; ++count) {
+      std::swap(*start_byte++,*end_byte--);
+    }
+  }
+  return;
+}*/
+
+
+
 static Status UnpackTensorWithExternalDataImpl(const ONNX_NAMESPACE::TensorProto& tensor,
                                                const ORTCHAR_T* tensor_proto_dir,
                                                size_t expected_num_elements, size_t element_size,
@@ -1063,10 +1148,6 @@ ONNXTensorElementDataType GetTensorElementType(const ONNX_NAMESPACE::TensorProto
 }
 
 ONNX_NAMESPACE::TensorProto TensorToTensorProto(const Tensor& tensor, const std::string& tensor_proto_name) {
-  // Given we are using the raw_data field in the protobuf, this will work only for little-endian format.
-  if constexpr (endian::native != endian::little) {
-    ORT_THROW("Big endian not supported");
-  }
 
   // Set name, dimensions, type, and data of the TensorProto.
   ONNX_NAMESPACE::TensorProto tensor_proto;
