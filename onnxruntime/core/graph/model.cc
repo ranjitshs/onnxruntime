@@ -69,8 +69,39 @@ void Model::RemoveLocalFunctionsProtos(const InlinedHashSet<std::string>& retain
     }
   }
 }
-
 static constexpr int DEFAULT_PROTOBUF_BLOCK_SIZE = 4 * 1024 * 1024;
+
+//This method will form a vector having pointer of all the sub-graph
+//of a input graph.
+void GetSubGraphs(Graph& graph, std::vector<Graph*>& subgraphs)
+{
+  for (auto& node : graph.Nodes()) {
+    for (const Graph* subgraph1 : node.GetSubgraphs()) {
+      Graph* subgraph = const_cast<Graph*>(subgraph1);
+      subgraphs.push_back(subgraph);
+      GetSubGraphs(*subgraph, subgraphs);
+    }
+  }
+}
+
+//This method will be used for converting graph raw data endianess 
+//in big-endian system.
+void ConvertGraph(Model& model)
+{
+  Graph& gra = model.MainGraph();
+  std::vector<Graph*> all_subgraphs;
+  GetSubGraphs(gra, all_subgraphs);
+  all_subgraphs.push_back(&gra);
+
+  for (Graph*& grp: all_subgraphs) {
+    Graph& gr = *grp;
+    for (const auto& [name, tensor_p] : gr.GetAllInitializedTensors()) {
+      if (tensor_p->has_raw_data()) {
+        utils::ConvertRawDataInTensorProto((TensorProto*)tensor_p);
+      }
+    }
+  }
+}
 
 Model::Model(const std::string& graph_name,
              bool is_onnx_domain_only,
@@ -733,6 +764,10 @@ Status Model::Load(int fd, const PathString& model_path, std::shared_ptr<Model>&
   ORT_RETURN_IF_ERROR(Load(fd, model_proto));
 
   p_model = std::make_shared<Model>(std::move(model_proto), model_path, local_registries, logger, options);
+  if ((model_path != "") && (endian::native != endian::little)) {
+    ConvertGraph(*p_model);
+  }
+  
 
   Graph::ResolveOptions resolve_options;
   resolve_options.no_proto_sync_required = true;
@@ -745,6 +780,9 @@ Status Model::Save(Model& model, int p_fd) {
   if (p_fd < 0) {
     return Status(ONNXRUNTIME, INVALID_ARGUMENT, "<p_fd> is less than 0.");
   }
+  if (endian::native != endian::little) {
+    ConvertGraph(model);
+  } 
 
   ORT_RETURN_IF_ERROR(model.MainGraph().Resolve());
 

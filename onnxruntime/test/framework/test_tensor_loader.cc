@@ -129,7 +129,11 @@ static void run_external_data_test() {
     ASSERT_NE(len, (DWORD)0);
     cwd.append(ORT_TSTR("\\fake.onnx"));
 #else
+#if defined( _AIX)
+    char* p = getcwd(nullptr, PATH_MAX);
+#else
     char* p = getcwd(nullptr, 0);
+#endif
     ASSERT_NE(p, nullptr);
     cwd = p;
     free(p);

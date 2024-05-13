@@ -104,6 +104,18 @@ std::vector<BFloat16> CreateValues<BFloat16>() {
 
 template <typename T>
 void WriteDataToFile(FILE* fp, const std::vector<T>& test_data) {
+  if constexpr (endian::native != endian::little) {
+    const size_t element_size = sizeof(T);
+    const size_t num_elements = test_data.size();
+    char *bytes = reinterpret_cast<char*>(const_cast<T*>(test_data.data()));
+    for (size_t i = 0; i < num_elements; ++i) {
+      char* start_byte =  bytes + i * element_size;
+      char* end_byte = start_byte + element_size - 1;
+      for (size_t count = 0; count < element_size / 2; ++count) {
+        std::swap(*start_byte++,*end_byte--);
+      }
+    }
+  }
   size_t size_in_bytes = test_data.size() * sizeof(T);
   ASSERT_EQ(size_in_bytes, fwrite(test_data.data(), 1, size_in_bytes, fp));
 }

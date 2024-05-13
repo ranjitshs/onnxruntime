@@ -1193,6 +1193,15 @@ Graph::Graph(const Model& owning_model,
 
     const gsl::not_null<TensorProto*> tensor{graph_proto_->add_initializer()};
     auto status = utils::ConstantNodeProtoToTensorProto(node, model_path, *tensor);
+    if constexpr (endian::native != endian::little) {
+      const AttributeProto& attrib = node.attribute(0);
+      if (attrib.type() == AttributeProto_AttributeType_SPARSE_TENSOR) {
+        const TensorProto& sparse_values = node.attribute(0).sparse_tensor().values();
+        if ((!(sparse_values.has_raw_data())) && tensor->has_raw_data()) {
+          utils::ConvertRawDataInTensorProto(tensor);
+        }
+      }
+    }
     ORT_ENFORCE(status.IsOK(), status.ToString());
     // Ensure initializers are also graph inputs.
     if (ir_version_ < 4) {
@@ -2518,6 +2527,29 @@ class GraphInferencerImpl : public ONNX_NAMESPACE::GraphInferencer {
   const Graph::ResolveOptions& options_;
 };
 
+//This ConvertNode will change the endianess of the raw data
+//of all the tensors.  This endianess conversion is required
+//before inferencing request.
+void ConvertNode(Node& node, Graph& graph)
+{
+  for (auto nodearg: node.InputDefs())
+  {
+    const TensorProto* inpt = nullptr;
+    if (graph.IsSparseInitializer(nodearg->Name())) {
+      // Skip Sparse Initializer as no node op support
+      // Sparse Initializer for now
+      break;
+    }
+    graph.GetInitializedTensor(nodearg->Name(), inpt);
+    if (inpt != nullptr && inpt->has_raw_data()) {
+      TensorProto nt = *inpt;
+      utils::ConvertRawDataInTensorProto(&nt);
+      Status st = graph.ReplaceInitializedTensor(nt);
+      assert(st.IsOK());
+    }
+  }
+}
+
 // An implementation of the InferenceContext interface required by operator-specific
 // shape inference for onnxruntime graphs.
 class InferenceContextImpl : public ONNX_NAMESPACE::InferenceContext {
@@ -2813,6 +2845,9 @@ Status Graph::InferAndVerifyTypeMatch(Node& node, const OpSchema& op, const Reso
   // Once that completes, the outputs from the node containing the subgraph will be updated, and the final values
   // returned here.
   SubgraphInferencingFunc func(Graph::InferAndVerifySubgraphTypes);
+  if constexpr (endian::native != endian::little){
+    ConvertNode(node, *this);
+  }
   InferenceContextImpl context(node, func, *this, options);
 
   {
@@ -2942,7 +2977,9 @@ Status Graph::InferAndVerifyTypeMatch(Node& node, const OpSchema& op, const Reso
       }
     }
   }
-
+  if constexpr (endian::native != endian::little){
+    ConvertNode(node, *this);
+  }
   return Status::OK();
 }
 
@@ -3695,6 +3732,12 @@ SaveInputsOutputsToOrtFormat(flatbuffers::FlatBufferBuilder& builder, const std:
 
 common::Status Graph::SaveToOrtFormat(flatbuffers::FlatBufferBuilder& builder,
                                       flatbuffers::Offset<fbs::Graph>& fbs_graph) const {
+  if constexpr (endian::native != endian::little) {
+    auto& tens = GetAllInitializedTensors();
+    for (auto& [name, tensor_p] : tens){
+      utils::ConvertRawDataInTensorProto((TensorProto*)tensor_p);
+    }
+  }
   auto inputs = SaveInputsOutputsToOrtFormat(builder, graph_inputs_including_initializers_);
   auto outputs = SaveInputsOutputsToOrtFormat(builder, graph_outputs_);
 
@@ -5313,6 +5356,11 @@ common::Status Graph::LoadFromOrtFormat(const onnxruntime::fbs::Graph& fbs_graph
       ORT_RETURN_IF(nullptr == fbs_tensor, "Initializer tensor is missing. Invalid ORT format model.");
       TensorProto* initializer = deserialized_proto_data_.add_initializer();
       ORT_RETURN_IF_ERROR(fbs::utils::LoadInitializerOrtFormat(*fbs_tensor, *initializer, load_options));
+      if constexpr (endian::native != endian::little){
+        if (initializer->has_raw_data()) {
+          utils::ConvertRawDataInTensorProto(initializer);
+        }
+      }
       auto p = name_to_initial_tensor_.emplace(initializer->name(), initializer);
       if (!p.second) {
         LOGS(logger_, WARNING) << "Duplicate initializer (dense or ConstantNode): '" << initializer->name()
@@ -5334,6 +5382,16 @@ common::Status Graph::LoadFromOrtFormat(const onnxruntime::fbs::Graph& fbs_graph
       ORT_RETURN_IF_ERROR(fbs::utils::LoadSparseInitializerOrtFormat(*fbs_sparse_tensor, sparse_initializer,
                                                                      load_options));
       TensorProto& initializer = *deserialized_proto_data_.add_initializer();
+      if constexpr (endian::native != endian::little){
+        TensorProto* indices = sparse_initializer.mutable_indices();
+        if (indices->has_raw_data()) {
+          utils::ConvertRawDataInTensorProto(indices);
+        }
+        TensorProto* values = sparse_initializer.mutable_values();
+        if (values->has_raw_data()) {
+          utils::ConvertRawDataInTensorProto(values);
+        }
+      }
       ORT_RETURN_IF_ERROR(utils::SparseTensorProtoToDenseTensorProto(sparse_initializer, model_path, initializer));
       auto p = name_to_initial_tensor_.emplace(initializer.name(), &initializer);
       if (!p.second) {
