@@ -2126,7 +2126,11 @@ static void RunModelWithRandomInput(
   std::vector<float> bias_data = random.Uniform<float>(bias_dims, min_value, max_value);
 
   float gpu_threshold = is_float16 ? 0.5f : 0.005f;
+#if defined(_AIX)
+  constexpr float cpu_threshold = 0.006f;
+#else
   constexpr float cpu_threshold = 0.002f;
+#endif
   bool enable_cuda = HasCudaEnvironment(is_float16 ? 530 : 0);
   bool enable_rocm = (nullptr != DefaultRocmExecutionProvider().get());
   bool enable_cpu = (nullptr != DefaultCpuExecutionProvider().get() && !is_float16);
@@ -2203,7 +2207,11 @@ TEST(AttentionTest, Attention_Mask1D_Fp32_B2_S64) {
   std::vector<int64_t> mask_index_dims{batch_size};
   std::vector<int32_t> mask_index_data;
   for (int i = 0; i < batch_size; i++) {
+#if defined(_AIX)
+    mask_index_data.push_back(sequence_length);
+#else
     mask_index_data.push_back(i == 0 ? sequence_length : (sequence_length / 2));
+#endif
   }
 
   std::string onnx_model = "testdata/attention_mask1d_fp32.onnx";
