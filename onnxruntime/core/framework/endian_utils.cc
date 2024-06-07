@@ -57,7 +57,7 @@ Status CopyLittleEndian(size_t element_size_in_bytes,
                 "source and destination buffer size mismatch");
 
   std::memcpy(destination_bytes.data(), source_bytes.data(), source_bytes.size_bytes());
-  (void)element_size_in_bytes;
+  ORT_UNUSED_PARAMETER(element_size_in_bytes);
 
   return Status::OK();
 }

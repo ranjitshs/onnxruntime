@@ -73,7 +73,7 @@ static constexpr int DEFAULT_PROTOBUF_BLOCK_SIZE = 4 * 1024 * 1024;
 
 //This method will form a vector having pointer of all the sub-graph
 //of a input graph.
-void GetSubGraphs(Graph& graph, std::vector<Graph*>& subgraphs)
+static void GetSubGraphs(Graph& graph, std::vector<Graph*>& subgraphs)
 {
   for (auto& node : graph.Nodes()) {
     for (const Graph* subgraph1 : node.GetSubgraphs()) {
@@ -86,12 +86,12 @@ void GetSubGraphs(Graph& graph, std::vector<Graph*>& subgraphs)
 
 //This method will be used for converting graph raw data endianess 
 //in big-endian system.
-void ConvertGraph(Model& model)
+static void ConvertGraph(Model& model)
 {
   Graph& gra = model.MainGraph();
   std::vector<Graph*> all_subgraphs;
   GetSubGraphs(gra, all_subgraphs);
-  all_subgraphs.push_back(&gra);
+  all_subgraphs.emplace_back(&gra);
 
   for (Graph*& grp: all_subgraphs) {
     Graph& gr = *grp;
