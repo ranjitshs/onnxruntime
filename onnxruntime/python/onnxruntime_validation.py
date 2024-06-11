@@ -48,6 +48,11 @@ def check_distro_info():
         # warn the user ONNX Runtime may not work out of the box
         __my_distro__ = __my_distro__.lower()
         __my_distro_ver__ = __my_distro_ver__.lower()
+    elif __my_system__ == "aix":
+        import subprocess
+        returned_output = subprocess.check_output("oslevel")
+        __my_distro_ver__str = returned_output.decode("utf-8")
+        __my_distro_ver = __my_distro_ver__str[:3]
     elif __my_system__ == "darwin":
         __my_distro__ = __my_system__
         __my_distro_ver__ = platform.release().lower()
@@ -58,7 +63,7 @@ def check_distro_info():
             )
     else:
         warnings.warn(
-            "Unsupported platform (%s). ONNX Runtime supports Linux, macOS and Windows platforms, only." % __my_system__
+            "Unsupported platform (%s). ONNX Runtime supports Linux, AIX, macOS and Windows platforms, only." % __my_system__
         )
 
 

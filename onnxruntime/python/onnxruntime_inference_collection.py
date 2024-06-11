@@ -7,11 +7,15 @@ from __future__ import annotations
 import collections
 import collections.abc
 import os
+import sys
+import struct
+import numpy as np
 import typing
 import warnings
 from typing import Any, Sequence
 
 from onnxruntime.capi import _pybind_state as C
+from onnx import (ModelProto, mapping)
 
 if typing.TYPE_CHECKING:
     import onnxruntime
@@ -433,6 +437,54 @@ class InferenceSession(Session):
             # Fallback is disabled. Raise the original error.
             raise e
 
+
+    @classmethod
+    def update_tensor(self,tensor):
+        if tensor.float_data:
+            for num in tensor.float_data:
+                num = struct.unpack("<f", struct.pack(">f", num))[0]
+        if tensor.int32_data:
+            for num in tensor.int32_data:
+                num = struct.unpack("<i", struct.pack(">i", num))[0]
+        if tensor.int64_data:
+            for num in tensor.int64_data:
+                num = struct.unpack("<q", struct.pack(">q", num))[0]
+        if tensor.uint64_data:
+            for num in tensor.uint64_data:
+                num = struct.unpack("<Q", struct.pack(">Q", num))[0]
+        if tensor.HasField("raw_data") == False:
+            return
+        vals = tensor.raw_data
+        np_dtype = mapping.TENSOR_TYPE_MAP[tensor.data_type].np_dtype
+        if sys.byteorder == 'big':
+            vals_ndarray = np.frombuffer(vals, np_dtype, count=-1, offset=0)
+            if type(vals_ndarray) is np.ndarray:
+                raw_data_le_temp = vals_ndarray.byteswap(inplace=False)
+                tensor.raw_data = raw_data_le_temp.tobytes()
+        else:
+            tensor.raw_data = vals
+
+
+    @classmethod
+    def change_model_2(cls,model):
+        for node in model:
+            ma = node.attribute
+            for attr in ma:
+                cls.update_tensor(attr.t)
+                cls.change_model_2(attr.g.node)
+
+    @classmethod
+    def change_model(self,model):
+        mp = ModelProto()
+        mp.ParseFromString(model)
+        mn = mp.graph.node
+        self.change_model_2(mn)
+        
+        mg = mp.graph.initializer
+        for tensor in mg:
+           self.update_tensor(tensor)
+        return mp.SerializeToString()
+
     def _create_inference_session(self, providers, provider_options, disabled_optimizers=None):
         available_providers = C.get_available_providers()
 
@@ -471,6 +523,7 @@ class InferenceSession(Session):
         if self._model_path:
             sess = C.InferenceSession(session_options, self._model_path, True, self._read_config_from_model)
         else:
+            self._model_bytes = self.change_model(self._model_bytes)
             sess = C.InferenceSession(session_options, self._model_bytes, False, self._read_config_from_model)
 
         if disabled_optimizers is None:

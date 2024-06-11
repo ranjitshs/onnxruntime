@@ -5,8 +5,8 @@ if (onnxruntime_USE_PREINSTALLED_EIGEN)
 else ()
     FetchContent_Declare(
         eigen
-        URL ${DEP_URL_eigen}
-        URL_HASH SHA1=${DEP_SHA1_eigen}
+        URL https://gitlab.com/libeigen/eigen/-/archive/bb51d9f4fa3cf1114348b9180640d6da7d3964f9/eigen-bb51d9f4fa3cf1114348b9180640d6da7d3964f9.zip
+        #URL_HASH SHA1=${DEP_SHA1_eigen}
     )
 
     FetchContent_Populate(eigen)
