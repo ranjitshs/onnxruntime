@@ -1,6 +1,6 @@
 ### Build instruction using IBM Open XL compiler/tool-chain
 * Make sure that latest IBM Open XL compiler is installed. At the writing of this doc, IBM Open XL 17.1.2.5 is used.
-* Build script internally uses python so install python3 also.
+* Build script internally uses python, so install python3 also.
 * Export the below env settings.
   ```bash
   ulimit -m unlimited
@@ -26,7 +26,7 @@
   
 ### Build instruction using gcc compiler/tool-chain
 * Make sure that gcc/g++ compiler is installed.
-* Build script internally uses python so install python3 also.
+* Build script internally uses python, so install python3 also.
 * Export the below env settings.
   ```bash
   ulimit -m unlimited
@@ -38,7 +38,7 @@
   export CPPFLAGS="-I/opt/freeware/include -maix64 "
   export CFLAGS="${CPPFLAGS} -DFLATBUFFERS_LOCALE_INDEPENDENT=0 -maltivec -mvsx -Wl,-bbigtoc -Wno-unused-variable -Wno-unused-parameter -Wno-sign-compare -fno-extern-tls-init  -Wl,-berok "
   export CXXFLAGS="${CPPFLAGS} -DFLATBUFFERS_LOCALE_INDEPENDENT=0 -maltivec -mvsx -Wl,-bbigtoc -Wno-unused-variable -Wno-unused-parameter -Wno-sign-compare -fno-extern-tls-init -Wl,-berok"
-  export LDFLAGS="-L/opt/freeware/lib/pthread -L/opt/freeware/lib64 -L/opt/freeware/lib -lpthread -lpython3.9"
+  export LDFLAGS="-L/opt/freeware/lib/pthread -L/opt/freeware/lib64 -L/opt/freeware/lib -lpython3.9"
   ``` 
 - Invoke the build script. 
   ```bash
